@@ -1,0 +1,11 @@
+[package]
+name = "breathes"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+inquire = "0.9.1"
+hunspell-rs = "0.4.0"
+lingua = "1.7.2"
+regex = "1.12.2"
+once_cell = "1.21.3"
