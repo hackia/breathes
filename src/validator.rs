@@ -139,7 +139,5 @@ pub fn validate_body_line_length(input: &str) -> Result<Validation, CustomUserEr
             return Ok(Validation::Invalid(message));
         }
     }
-
-    // Toutes les lignes sont OK
     Ok(Validation::Valid)
 }
