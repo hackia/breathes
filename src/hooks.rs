@@ -1,4 +1,3 @@
-use crate::hooks::Language::{CSharp, D, Haskell};
 use crossterm::style::Stylize;
 use glob::glob;
 use spinners::{Spinner, Spinners};
@@ -80,7 +79,7 @@ impl From<String> for Language {
             return Self::CMake;
         }
         if value.eq("CSharp") {
-            return CSharp;
+            return Self::CSharp;
         }
         if value.eq("Maven") {
             return Self::Maven;
@@ -101,10 +100,10 @@ impl From<String> for Language {
             return Self::Elixir;
         }
         if value.eq("D") {
-            return D;
+            return Self::D;
         }
         if value.eq("Haskell") {
-            return Haskell;
+            return Self::Haskell;
         }
         Self::Unknown
     }
@@ -116,33 +115,32 @@ impl Language {
         match language {
             Self::Javascript => NODE_FILE,
             Self::Typescript => TYPESCRIPT_FILE,
-            Haskell => HASKELL_FILE,
+            Self::Haskell => HASKELL_FILE,
             Self::Rust => RUST_FILE,
             Self::Python => PYTHON_FILE,
             Self::Go => GO_FILE,
             Self::Php => PHP_FILE,
             Self::Ruby => RUBY_FILE,
             Self::CMake => CMAKE_FILE,
-            CSharp => CS_PROJ,
+            Self::CSharp => CS_PROJ,
             Self::Maven => MAVEN_POM,
             Self::Kotlin => KOTLIN_FILE,
             Self::Gradle => GRADLE_FILE,
             Self::Swift => SWIFT_FILE,
             Self::Dart => DART_FILE,
             Self::Elixir => ELIXIR_FILE,
-            D => D_FILE,
+            Self::D => D_FILE,
             Self::R | Self::Unknown => "",
         }
     }
 }
 
-pub const LANGUAGES: [(Language, &str); 17] = [
+pub const LANGUAGES: [(Language, &str); 16] = [
     (Language::Rust, RUST_FILE),
     (Language::Typescript, TYPESCRIPT_FILE),
-    (Haskell, HASKELL_FILE),
-    (D, D_FILE),
+    (Language::Haskell, HASKELL_FILE),
     (Language::Javascript, NODE_FILE),
-    (CSharp, CS_PROJ),
+    (Language::CSharp, CS_PROJ),
     (Language::Maven, MAVEN_POM),
     (Language::Go, GO_FILE),
     (Language::Ruby, RUBY_FILE),
@@ -166,16 +164,16 @@ impl Display for Language {
             Self::Php => write!(f, "Php"),
             Self::Ruby => write!(f, "Ruby"),
             Self::CMake => write!(f, "CMake"),
-            CSharp => write!(f, "CSharp"),
+            Self::CSharp => write!(f, "CSharp"),
             Self::Maven => write!(f, "Maven"),
             Self::Kotlin => write!(f, "Kotlin"),
             Self::Gradle => write!(f, "Gradle"),
             Self::Swift => write!(f, "Swift"),
             Self::Dart => write!(f, "Dart"),
             Self::Elixir => write!(f, "Elixir"),
-            D => write!(f, "D"),
+            Self::D => write!(f, "D"),
             Self::Unknown => write!(f, "Unknown"),
-            Haskell => write!(f, "Haskell"),
+            Self::Haskell => write!(f, "Haskell"),
             Self::R => write!(f, "R"),
         }
     }
@@ -193,7 +191,7 @@ pub struct Hook {
 impl Hook {
     pub fn d(hooks: &mut Vec<Self>) {
         hooks.push(Self {
-            language: D,
+            language: Language::D,
             description: "Building your project",
             success: "Build successful",
             failure: "Build failed",
@@ -201,7 +199,7 @@ impl Hook {
             command: "dub build",
         });
         hooks.push(Self {
-            language: D,
+            language: Language::D,
             description: "Testing your project",
             success: "Tests passed",
             failure: "Tests failed",
@@ -212,7 +210,7 @@ impl Hook {
 
     pub fn haskell(hooks: &mut Vec<Self>) {
         hooks.push(Self {
-            language: Haskell,
+            language: Language::Haskell,
             description: "Checking for outdated packages in your project",
             success: "No outdated packages found",
             failure: "Outdated packages found",
@@ -220,7 +218,7 @@ impl Hook {
             command: "cabal outdated",
         });
         hooks.push(Self {
-            language: Haskell,
+            language: Language::Haskell,
             description: "Checking for security vulnerabilities",
             success: "No vulnerabilities found",
             failure: "Vulnerabilities found",
@@ -228,7 +226,7 @@ impl Hook {
             command: "cabal audit",
         });
         hooks.push(Self {
-            language: Haskell,
+            language: Language::Haskell,
             description: "Running tests for your Haskell project",
             success: "Tests passed",
             failure: "Tests failed",
@@ -240,7 +238,7 @@ impl Hook {
         Self::javascript(hooks);
         hooks.push(Self {
             language: Language::Typescript,
-            description: "Checking for type in your project",
+            description: "Checking fora type in your project",
             success: "Types are valid",
             failure: "Type errors found",
             file: "types.log",
@@ -571,7 +569,7 @@ impl Hook {
 
     pub fn csharp(hooks: &mut Vec<Self>) {
         hooks.push(Self {
-            language: CSharp,
+            language: Language::CSharp,
             description: "Checking for code formatting",
             success: "Code formatting is correct",
             failure: "Code formatting issues found",
@@ -579,7 +577,7 @@ impl Hook {
             command: "dotnet format --verify-no-changes",
         });
         hooks.push(Self {
-            language: CSharp,
+            language: Language::CSharp,
             description: "Running unit tests",
             success: "All tests passed",
             failure: "Some tests failed",
@@ -587,7 +585,7 @@ impl Hook {
             command: "dotnet test",
         });
         hooks.push(Self {
-            language: CSharp,
+            language: Language::CSharp,
             description: "Building the project",
             success: "Build successful",
             failure: "Build failed",
@@ -595,7 +593,7 @@ impl Hook {
             command: "dotnet build",
         });
         hooks.push(Self {
-            language: CSharp,
+            language: Language::CSharp,
             description: "Checking for dependency updates",
             success: "Dependencies are up to date",
             failure: "Dependency updates available",
@@ -603,7 +601,7 @@ impl Hook {
             command: "dotnet restore",
         });
         hooks.push(Self {
-            language: CSharp,
+            language: Language::CSharp,
             description: "Checking for security vulnerabilities",
             success: "No vulnerabilities found",
             failure: "Vulnerabilities found",
@@ -747,8 +745,8 @@ impl Hook {
             Language::Unknown | Language::R => {}
             Language::Kotlin => Self::kotlin(&mut hooks),
             Language::Typescript => Self::typescript(&mut hooks),
-            D => Self::d(&mut hooks),
-            Haskell => Self::haskell(&mut hooks),
+            Language::D => Self::d(&mut hooks),
+            Language::Haskell => Self::haskell(&mut hooks),
             Language::Maven => Self::maven(&mut hooks),
             Language::Gradle => Self::gradle(&mut hooks),
             Language::Javascript => Self::javascript(&mut hooks),
@@ -758,7 +756,7 @@ impl Hook {
             Language::Php => Self::php(&mut hooks),
             Language::Ruby => Self::ruby(&mut hooks),
             Language::CMake => Self::cmake(&mut hooks),
-            CSharp => Self::csharp(&mut hooks),
+            Language::CSharp => Self::csharp(&mut hooks),
             Language::Swift => Self::swift(&mut hooks),
             Language::Dart => Self::dart(&mut hooks),
             Language::Elixir => Self::elixir(&mut hooks),
@@ -916,7 +914,7 @@ fn run_hook(lang: Language, all: &mut HashMap<String, (bool, u64)>) -> Result<()
 }
 
 fn add_if_exists(file: &str, language: Language, vec: &mut Vec<Language>) {
-    if language == CSharp
+    if language == Language::CSharp
         && let Ok(files) = glob(file)
     {
         for file in files {
@@ -926,7 +924,7 @@ fn add_if_exists(file: &str, language: Language, vec: &mut Vec<Language>) {
                 vec.push(language);
             }
         }
-    } else if language == D
+    } else if language == Language::D
         && let Ok(files) = glob(file)
     {
         for file in files {
@@ -936,7 +934,7 @@ fn add_if_exists(file: &str, language: Language, vec: &mut Vec<Language>) {
                 vec.push(language);
             }
         }
-    } else if language == Haskell
+    } else if language == Language::Haskell
         && let Ok(files) = glob(file)
     {
         for file in files {
