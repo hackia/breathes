@@ -1,34 +1,391 @@
 use crossterm::style::Stylize;
 use glob::glob;
-use spinners::{Spinner, Spinners};
-use std::collections::HashMap;
+use indicatif::{ProgressBar, ProgressStyle};
+use rayon::prelude::*;
 use std::fmt::{Display, Formatter};
 use std::fs::{File, create_dir_all};
 use std::io::Error;
-use std::path::{MAIN_SEPARATOR_STR, Path};
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Instant;
 use tabled::Tabled;
 use tabled::settings::Style;
 
+/// A constant string representing the file extension pattern for C# project files.
+///
+/// This constant is typically used to identify or filter files with the `.csproj`
+/// extension in a directory or during build/deployment processes.
+///
+/// # Example
+/// ```rust
+/// use breathes::hooks::CS_PROJ;
+///
+/// let file_pattern = CS_PROJ;
+/// assert_eq!(file_pattern, "*.csproj");
+/// ```
+///
+/// # Value
+/// - `"*.csproj"`: A glob pattern to match any C# project file.
+///
+/// # Use Case
+/// - Filtering `.csproj` files in a filesystem search.
+/// - Identifying C# project files for parsing or processing.
+///
 pub const CS_PROJ: &str = "*.csproj";
+
+///
+/// A constant representing the filename of a Maven Project Object Model (POM) file.
+///
+/// # Description
+/// The POM file (typically named `pom.xml`) is an XML file used by Maven,
+/// a build automation tool for Java projects. The POM file contains information
+/// about the project and configuration details used by Maven to build and manage it.
+///
+/// This constant can be used in applications or tools that interact with
+/// Maven-based projects to refer to the standard POM file name.
+///
+/// # Example
+///
+/// ```rust
+/// let pom_file = breathes::hooks::MAVEN_POM;
+/// println!("The Maven POM file is named: {pom_file}");
+/// ```
+///
+/// # Value
+/// - `"pom.xml"`: The default and conventional name for Maven's POM file.
+///
+/// # Usage
+/// This constant is read-only and can be used wherever a reference to
+/// the canonical POM file name is needed.
+///
+/// # See Also
+/// - [Maven Project Object Model documentation](https://maven.apache.org/pom.html)
 pub const MAVEN_POM: &str = "pom.xml";
+
+///
+/// A constant representing the filename of the Cargo.toml file.
+///
+/// `RUST_FILE` is a string slice that holds the name of the default
+/// configuration file used by Rust's package manager, Cargo. This file
+/// defines the metadata and dependencies of a Rust project.
+///
+/// # Example
+/// ```rust
+/// use breathes::hooks::RUST_FILE;
+/// println!("The Cargo configuration file is: {RUST_FILE}");
+/// ```
 pub const RUST_FILE: &str = "Cargo.toml";
+
+///
+/// A constant representing the name of the Go module file.
+///
+/// This constant is used to identify and reference the standard
+/// `go.mod` file in projects that use the Go programming language.
+/// The `go.mod` file defines the module properties and manages
+/// dependencies for a Go project.
+///
+/// # Examples
+///
+/// ```rust
+/// use breathes::hooks::GO_FILE;
+///
+/// assert_eq!(GO_FILE, "go.mod");
+/// ```
+///
+/// # Usage
+///
+/// This constant can be used in tools or utilities that interact
+/// with Go projects to check for the presence of a `go.mod` file
+/// or to manipulate it programmatically.
 pub const GO_FILE: &str = "go.mod";
+
+/// A constant representing the filename for the Composer JSON file typically used in PHP projects.
+///
+/// This constant holds the name of the file `composer.json`, which is commonly associated with
+/// dependency management and autoloading configurations in PHP development.
+///
+/// # Example
+///
+/// ```rust
+/// // Usage of the PHP_FILE constant
+/// use breathes::hooks::PHP_FILE;
+/// println!("The file name is: {PHP_FILE}");
+/// ```
+/// # Purpose
+///
+/// This constant can be used in scenarios such as
+/// - Identifying the Composer configuration file in file operations
+/// - Validating the presence of `composer.json` in a directory
+/// - Referring to the file name consistently across a codebase
+///
+/// # Value
+/// `"composer.json"` - The standard filename for Composer's configuration.
 pub const PHP_FILE: &str = "composer.json";
+
+///
+/// A constant representing the name of the file commonly used to define metadata
+/// and dependencies for Node.js projects.
+///
+/// # Value
+/// "package.json"
+///
+/// # Purpose
+/// This constant provides a convenient and reusable identifier for the "package.json" file,
+/// which is a standard file in Node.js environments that contains project information,
+/// such as the name, version, scripts, dependencies, and other configuration details.
+///
+/// # Example
+/// ```rust
+/// use breathes::hooks::NODE_FILE;
+/// println!("The Node.js project file is: {NODE_FILE}");
+/// ```
 pub const NODE_FILE: &str = "package.json";
+
+///
+/// A constant representing the default name of the CMake configuration file.
+///
+/// This file, typically named `CMakeLists.txt`, is used by the CMake build system
+/// to define build configurations, targets, dependencies, and other project settings.
+///
+/// # Examples
+///
+/// ```rust
+/// use breathes::hooks::CMAKE_FILE;
+/// println!("CMake configuration file: {CMAKE_FILE}");
+/// ```
+///
+/// This will output:
+/// ```text
+/// CMake configuration file: CMakeLists.txt
+/// ```
 pub const CMAKE_FILE: &str = "CMakeLists.txt";
+
+/// A constant representing the filename of the primary configuration file for Elixir projects.
+///
+/// # Description
+/// `ELIXIR_FILE` is a string constant that holds the name of the default configuration file
+/// used in Elixir projects, which is `mix.exs`. This file typically contains build configuration,
+/// dependencies, and other settings required for the Elixir project's build tool, Mix.
+///
+/// # Example
+/// ```rust
+/// use breathes::hooks::ELIXIR_FILE;
+/// println!("Elixir configuration file: {ELIXIR_FILE}");
+/// ```
+///
+/// This constant can be useful when working with file system operations or tools that
+/// interact with Elixir projects.
+///
 pub const ELIXIR_FILE: &str = "mix.exs";
+
+/// A constant representing the default filename for a Ruby Gemfile.
+///
+/// # Description
+/// The `RUBY_FILE` constant is used to specify the name of the standard file
+/// associated with Ruby projects for managing dependencies. By default, this file
+/// is typically named "Gemfile".
+///
+/// # Usage
+/// This constant can be used whenever there is a need to refer to the Ruby Gemfile
+/// by its standard name in a program, ensuring consistency and reusability.
+///
+/// # Example
+/// ```
+/// use breathes::hooks::RUBY_FILE;
+///
+/// fn main() {
+///     println!("The Ruby dependency file is named: {RUBY_FILE}");
+/// }
+/// ```
+///
 pub const RUBY_FILE: &str = "Gemfile";
+
+/// A constant that holds the file name of the `pubspec.yaml` file.
+///
+/// # Description
+/// `pubspec.yaml` is a configuration file used in Dart and Flutter projects.
+/// It typically contains metadata about the project (e.g., name, description, version),
+/// as well as dependencies and other settings.
+///
+/// # Example
+/// ```rust
+/// use breathes::hooks::DART_FILE;
+/// let dart_config_file = DART_FILE;
+/// println!("The Dart configuration file is: {dart_config_file}");
+/// ```
+///
+/// # Usage
+/// This constant can be used wherever the name of the `pubspec.yaml` file
+/// is required, reducing hardcoding and the risk of mistakes.
 pub const DART_FILE: &str = "pubspec.yaml";
+
+///
+/// A constant representing the filename of the Kotlin build script.
+///
+/// This constant is typically used to identify and reference the `settings.gradle.kts`
+/// file in a project. The file is a common entry point for configuring build settings
+/// in projects that use Gradle with Kotlin DSL.
+///
+/// # Example
+///
+/// ```rust
+/// use breathes::hooks::KOTLIN_FILE;
+///
+/// println!("The Kotlin build script file is: {KOTLIN_FILE}");
+/// ```
+///
+/// # Value
+/// - `"settings.gradle.kts"`: The standard name for the settings file written in Kotlin DSL.
 pub const KOTLIN_FILE: &str = "settings.gradle.kts";
+
+/// The constant `GRADLE_FILE` represents the default filename
+/// for the Gradle settings file in a project.
+///
+/// This filename is commonly used in Java and Android projects
+/// to define project-specific settings for Gradle, such as
+/// including subprojects or configuring the build environment.
+///
+/// # Value
+/// - `"settings.gradle"`
+///
+/// # Example
+/// ```rust
+/// use breathes::hooks::GRADLE_FILE;
+/// let gradle_file = GRADLE_FILE;
+/// println!("The Gradle settings file is: {gradle_file}");
+/// ```
+/// pub
 pub const GRADLE_FILE: &str = "settings.gradle";
+
+/// A constant representing the filename of the Swift package manifest.
+///
+/// # Description
+/// `SWIFT_FILE` is a string constant that holds the name of the `Package.swift` file,
+/// which is the manifest file used in Swift projects to define package properties,
+/// dependencies, and build configurations.
+///
+/// # Example
+/// ```rust
+/// use breathes::hooks::SWIFT_FILE;
+/// let manifest_file = SWIFT_FILE;
+/// assert_eq!(manifest_file, "Package.swift");
+/// ```
+///
+/// # Usage
+/// This constant can be used wherever you need to refer to the Swift package manifest file
+/// in tools or scripts that interact with Swift projects.
+///
+/// # Notes
+/// - The `Package.swift` file is specific to the Swift Package Manager (SPM).
+/// - Ensure that the file exists in the project directory when working with Swift projects.
 pub const SWIFT_FILE: &str = "Package.swift";
+
+/// A constant representing the default filename for a Python requirements file.
+///
+/// This constant is commonly used to reference the `requirements.txt` file, which is
+/// a standard file in Python projects for specifying dependencies.
+///
+/// # Example
+/// ```rust
+/// use breathes::hooks::PYTHON_FILE;
+/// println!("Python requirements file: {PYTHON_FILE}");
+/// ```
+///
+/// The value of this constant is `"requirements.txt"`.
 pub const PYTHON_FILE: &str = "requirements.txt";
+
+/// A constant representing the default TypeScript configuration file name.
+///
+/// This constant specifies the filename of the TypeScript configuration file
+/// commonly used in TypeScript projects. It is typically used to reference or
+/// locate the "tsconfig.json" file in a project's directory structure.
+///
+/// # Example
+/// ```rust
+/// use breathes::hooks::TYPESCRIPT_FILE;
+///
+/// println!("The TypeScript config file is: {TYPESCRIPT_FILE}");
+/// // Output: The TypeScript config file is: tsconfig.json
+/// ```
+///
+/// # Value
+/// - `"tsconfig.json"`: The standard filename for TypeScript configuration.
+///
+/// # Use Cases
+/// - Referencing the `tsconfig.json` file in file-management utilities.
+/// - Validating or modifying the TypeScript configuration programmatically.
 pub const TYPESCRIPT_FILE: &str = "tsconfig.json";
+
+/// A constant that represents the file pattern for Haskell Cabal files.
+///
+/// This constant is used to match files with the `.cabal` extension,
+/// typically associated with Haskell projects that use the Cabal build system.
+///
+/// # Example
+/// ```rust
+/// use breathes::hooks::HASKELL_FILE;
+/// let file_name = "project.cabal";
+/// if file_name.ends_with(HASKELL_FILE.trim_start_matches('*')) {
+///     println!("This is a Haskell Cabal file!");
+/// }
+/// ```
+///
+/// # Value
+/// - `"*.cabal"`: Denotes a glob pattern for identifying Haskell Cabal files.
 pub const HASKELL_FILE: &str = "*.cabal";
+
+/// A constant representing the default filename for the Dub configuration file.
+///
+/// # Description
+/// This constant is used to refer to the default name of the primary Dub configuration
+/// file, which is `dub.json`. It is commonly utilized in applications that interact
+/// with the Dub package manager to configure project settings.
+///
+/// # Example
+/// ```rust
+/// use breathes::hooks::D_FILE;
+/// let config_file = D_FILE;
+/// println!("The Dub configuration file is: {config_file}");
+/// ```
+///
+/// # Usage
+/// Use this constant wherever the `dub.json` filename needs to be referenced in
+/// a consistent and centralized manner within your codebase.
+///
 pub const D_FILE: &str = "dub.json";
 
+///
+/// An enumeration representing various programming languages.
+///
+/// This enum is used to categorize and identify different programming
+/// languages. It derives several traits, including:
+/// - `Clone`: Allows the enum to be cloned.
+/// - `Copy`: Allows the enum to be copied rather than moved.
+/// - `Debug`: Enables formatting the enum value using the `{:?}` formatter.
+/// - `Hash`: Allows the enum to be used as a key in hashed collections, such as `HashMap`.
+/// - `Eq` and `PartialEq`: Enables equality and partial equality comparisons.
+/// - `Tabled`: Enables the enum to be used with table formatting libraries.
+///
+/// # Variants
+/// * `Unknown`: Represents an unspecified or unrecognized programming language.
+/// * `R`: Represents the R programming language.
+/// * `Javascript`: Represents the JavaScript programming language.
+/// * `Typescript`: Represents the TypeScript programming language.
+/// * `Haskell`: Represents the Haskell programming language.
+/// * `D`: Represents the D programming language.
+/// * `Rust`: Represents the Rust programming language.
+/// * `Python`: Represents the Python programming language.
+/// * `Go`: Represents the Go programming language.
+/// * `Php`: Represents the PHP programming language.
+/// * `Ruby`: Represents the Ruby programming language.
+/// * `CMake`: Represents the CMake build scripting language.
+/// * `CSharp`: Represents the C# programming language.
+/// * `Maven`: Represents Maven, a build automation tool for Java.
+/// * `Kotlin`: Represents the Kotlin programming language.
+/// * `Gradle`: Represents Gradle, a build automation tool for Java and Android.
+/// * `Swift`: Represents the Swift programming language.
+/// * `Dart`: Represents the Dart programming language.
+/// * `Elixir`: Represents the Elixir programming language.
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Tabled)]
 pub enum Language {
     Unknown,
@@ -135,6 +492,50 @@ impl Language {
     }
 }
 
+///
+/// A constant array defining a mapping between programming `Language` variants
+/// and their corresponding representative file extensions or filenames.
+///
+/// Each tuple in the array contains:
+/// - A `Language` enum variant representing a programming language.
+/// - A `&str` literal representing the associated file extension or identifier
+///   commonly used for that language (e.g., `.rs` for Rust, `pom.xml` for Maven).
+///
+/// # Examples
+///
+/// ```rust
+/// use breathes::hooks::LANGUAGES;
+/// use breathes::hooks::Language;
+///
+///
+/// ```
+///
+/// # Array Contents
+///
+/// - `Language::Rust` => `RUST_FILE`
+/// - `Language::Typescript` => `TYPESCRIPT_FILE`
+/// - `Language::Haskell` => `HASKELL_FILE`
+/// - `Language::Javascript` => `NODE_FILE`
+/// - `Language::CSharp` => `CS_PROJ`
+/// - `Language::Maven` => `MAVEN_POM`
+/// - `Language::Go` => `GO_FILE`
+/// - `Language::Ruby` => `RUBY_FILE`
+/// - `Language::Dart` => `DART_FILE`
+/// - `Language::Gradle` => `GRADLE_FILE`
+/// - `Language::Kotlin` => `KOTLIN_FILE`
+/// - `Language::Swift` => `SWIFT_FILE`
+/// - `Language::Php` => `PHP_FILE`
+/// - `Language::CMake` => `CMAKE_FILE`
+/// - `Language::Elixir` => `ELIXIR_FILE`
+/// - `Language::Python` => `PYTHON_FILE`
+///
+/// # Notes
+///
+/// This array can be used for operations such as:
+/// - Determining file types for code generation.
+/// - Associating files to specific programming languages in a codebase.
+/// Ensure to update this constant if new languages or file types are added to
+/// the `Language` enum in the future.
 pub const LANGUAGES: [(Language, &str); 16] = [
     (Language::Rust, RUST_FILE),
     (Language::Typescript, TYPESCRIPT_FILE),
@@ -219,14 +620,6 @@ impl Hook {
         });
         hooks.push(Self {
             language: Language::Haskell,
-            description: "Checking for security vulnerabilities",
-            success: "No vulnerabilities found",
-            failure: "Vulnerabilities found",
-            file: "audit.log",
-            command: "cabal audit",
-        });
-        hooks.push(Self {
-            language: Language::Haskell,
             description: "Running tests for your Haskell project",
             success: "Tests passed",
             failure: "Tests failed",
@@ -238,7 +631,7 @@ impl Hook {
         Self::javascript(hooks);
         hooks.push(Self {
             language: Language::Typescript,
-            description: "Checking fora type in your project",
+            description: "Checking for types",
             success: "Types are valid",
             failure: "Type errors found",
             file: "types.log",
@@ -248,20 +641,12 @@ impl Hook {
             language: Language::Typescript,
             description: "Checking for code formatting in your project",
             success: "Code is formatted correctly",
-            failure: "Code formating issues found",
+            failure: "Code formatting issues found",
             file: "fmt.log",
             command: "npx prettier --check .",
         });
     }
     pub fn maven(hooks: &mut Vec<Self>) {
-        hooks.push(Self {
-            language: Language::Maven,
-            description: "Checking for outdated dependencies",
-            success: "No outdated dependencies found",
-            failure: "Outdated dependencies found",
-            file: "outdated.log",
-            command: "mvn dependency:tree",
-        });
         hooks.push(Self {
             language: Language::Maven,
             description: "Checking for security vulnerabilities",
@@ -305,14 +690,6 @@ impl Hook {
                 file: "test.log",
                 command: "gradlew.bat test",
             });
-            hooks.push(Self {
-                language: Language::Gradle,
-                description: "Running tests for your Gradle project",
-                success: "Tests passed",
-                failure: "Tests failed",
-                file: "test.log",
-                command: "gradlew.bat test",
-            });
         } else {
             hooks.push(Self {
                 language: Language::Gradle,
@@ -327,14 +704,6 @@ impl Hook {
                 description: "Running unit test",
                 success: "Test passed",
                 failure: "Test failed",
-                file: "test.log",
-                command: "gradlew test",
-            });
-            hooks.push(Self {
-                language: Language::Gradle,
-                description: "Running tests for your Gradle project",
-                success: "Tests passed",
-                failure: "Tests failed",
                 file: "test.log",
                 command: "gradlew test",
             });
@@ -411,8 +780,8 @@ impl Hook {
         hooks.push(Self {
             language: Language::Rust,
             description: "Checks for linting issues and suggests code improvements",
-            success: "No warning founded",
-            failure: "Warnings founded",
+            success: "No warnings found",
+            failure: "Warnings found",
             file: "clippy.log",
             command: "cargo clippy -- -D clippy::all -W warnings -D clippy::pedantic -D clippy::nursery -A clippy::multiple_crate_versions",
         });
@@ -539,34 +908,32 @@ impl Hook {
             command: "bundle exec rspec",
         });
     }
-
     pub fn cmake(hooks: &mut Vec<Self>) {
         hooks.push(Self {
             language: Language::CMake,
-            description: "Generate Makefile",
-            success: "Makefile generation success.",
-            failure: "Makefile generation failed",
+            description: "Generating build configuration",
+            success: "Configuration generated successfully",
+            failure: "Configuration failed",
             file: "cmake.log",
-            command: "cmake .",
+            command: "cmake -S . -B build",
         });
         hooks.push(Self {
             language: Language::CMake,
-            description: "Building",
-            success: "Build success",
+            description: "Compiling the project",
+            success: "Build successful",
             failure: "Build failed",
-            file: "make.log",
-            command: "make",
+            file: "build.log",
+            command: "cmake --build build",
         });
         hooks.push(Self {
             language: Language::CMake,
-            description: "Testing",
-            success: "Tests passed",
+            description: "Running tests",
+            success: "All tests passed",
             failure: "Tests failed",
             file: "test.log",
-            command: "make test",
+            command: "ctest --test-dir build --output-on-failure",
         });
     }
-
     pub fn csharp(hooks: &mut Vec<Self>) {
         hooks.push(Self {
             language: Language::CSharp,
@@ -765,166 +1132,339 @@ impl Hook {
     }
 }
 ///
+/// Executes a set of parallel verification hooks for detected programming languages and provides
+/// a summarized view of the results, including their status (success, failure, or error) and execution time.
+///
+/// # Description
+/// The `run_hooks` function performs the following steps:
+/// 1. Detects the available programming languages using the `detect` function.
+/// 2. If no languages are detected, it returns an error.
+/// 3. Initializes a progress bar to visually inform the user about the progress of the hook executions.
+/// 4. Runs the verification hooks for each detected language in parallel using `into_par_iter()`.
+/// 5. Collects the results of the hook executions, including whether each one succeeded or failed,
+///    along with the time taken for execution.
+/// 6. Compiles the results into a formatted table and displays it on the console.
+/// 7. Returns a success or failure based on the aggregate status of the hooks.
+///
+/// # Returns
+/// - `Ok(0)` on successful execution when all hooks are successfully verified.
+/// - `Err(Error)` if an error occurs or one or more hooks fail.
+///
 /// # Errors
-/// on hooks failures
+/// - Returns `Err(Error::other("No language detected"))` if no programming languages are found.
+/// - Returns `Err(Error::other("Checks failed. Check logs in ./breathes/"))` if one or more hooks fail.
+///
+/// # Output
+/// This function logs the progress of the hook executions and a summarized results table to the console.
+///
+/// The table displays:
+/// - `Language`: The name of the detected programming language.
+/// - `Status`: The result for the language (e.g., "Success", "Failure", or "Error").
+/// - `Take`: Execution duration for that language in seconds.
+///
+/// At the end, an additional row summarizes the overall success or failure of all hooks and total elapsed time.
+///
+/// # Dependencies
+/// - Uses `ProgressBar` from the `indicatif` crate to display task progress.
+/// - `tabled` crate is used for displaying a results table.
+/// - Parallel execution is enabled with `rayon`.
+///
+/// # Panics
+/// - This function will panic if the provided progress bar style template cannot be set.
 pub fn run_hooks() -> Result<i32, Error> {
     let start = Instant::now();
-    let mut all: HashMap<String, (bool, u64)> = HashMap::new();
-    let mut table = tabled::builder::Builder::default();
-    let mut response: Vec<bool> = Vec::new();
     let l = detect();
+
     if l.is_empty() {
         return Err(Error::other("No language detected"));
     }
-    for lang in &l {
-        if run_hook(*lang, &mut all).is_err() {
-            return Err(Error::other("Failed to run hook"));
-        }
-    }
+    let pb = ProgressBar::new(l.len() as u64);
+    pb.set_style(
+        ProgressStyle::with_template(
+            "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} {msg}",
+        )
+        .expect("Failed to set progress bar style")
+        .progress_chars("#>-"),
+    );
+    // Informe l'utilisateur que le scan commence
+    println!("{}", "Running hooks in parallel...".bold().cyan());
+
+    // Exécution parallèle : map chaque langage vers son résultat de vérification
+    let results: Vec<(Language, Result<(bool, u64), Error>)> = l
+        .into_par_iter()
+        .map(|lang| {
+            let hooks = Hook::get(lang);
+            let res = verify(&hooks);
+            pb.inc(1);
+            (lang, res)
+        })
+        .collect();
+    pb.finish_with_message("All hooks completed!");
+    let mut table = tabled::builder::Builder::default();
     table.push_record(["Language", "Status", "Take"]);
-    for (language, &status) in &all {
-        response.push(status.0);
-        if status.0 {
-            table.push_record([
-                language.clone(),
-                "Success".to_string(),
-                format!("{}s", status.1),
-            ]);
-        } else {
-            table.push_record([
-                language.clone(),
-                "Failure".to_string(),
-                format!("{}s", status.1),
-            ]);
+
+    let mut global_success = true;
+
+    for (lang, res) in results {
+        match res {
+            Ok((status, duration)) => {
+                if !status {
+                    global_success = false;
+                }
+                let status_str = if status {
+                    "Success".green().to_string()
+                } else {
+                    "Failure".red().to_string()
+                };
+                table.push_record([lang.to_string(), status_str, format!("{duration}s")]);
+            }
+            Err(e) => {
+                global_success = false;
+                table.push_record([
+                    lang.to_string(),
+                    "Error".on_red().to_string(),
+                    e.to_string(),
+                ]);
+            }
         }
     }
-    if response.contains(&false) {
-        table.push_record([
-            "All".to_string(),
-            String::from("Failure"),
-            format!("{}s", start.elapsed().as_secs()),
-        ]);
+
+    // Résumé final dans la table
+    let final_status = if global_success {
+        "SUCCESS".green().bold().to_string()
     } else {
-        table.push_record([
-            "All".to_string(),
-            String::from("Success"),
-            format!("{}s", start.elapsed().as_secs()),
-        ]);
-    }
-    let mut report = table.build();
-    println!("{}", report.with(Style::modern_rounded()));
-    if response.contains(&false) {
-        return Err(Error::other("Some checks failed."));
+        "FAILURE".red().bold().to_string()
+    };
+
+    table.push_record([
+        "TOTAL".to_string(),
+        final_status,
+        format!("{}s", start.elapsed().as_secs()),
+    ]);
+
+    println!("\n{}", table.build().with(Style::modern_rounded()));
+
+    if !global_success {
+        return Err(Error::other("Checks failed. Check logs in ./breathes/"));
     }
     Ok(0)
 }
+/// Executes a given command, checks its exit status, and returns an appropriate result.
+///
+/// # Arguments
+///
+/// * `cmd` - A mutable reference to a `Command` that represents the command to execute.
+/// * `failure` - A string slice that provides an error message in case the command fails.
+///
+/// # Returns
+///
+/// * `Ok(())` - If the command executes successfully and returns an exit status of 0.
+/// * `Err(Error)` - If the command fails to execute or returns a non-zero exit status. The error
+///                  contains the provided failure message.
 ///
 /// # Errors
-/// on hooks command not founded
-pub fn ok(message: &str, cmd: &mut Command, success: &str, failure: &str) -> Result<(), Error> {
-    let mut output = Spinner::new(Spinners::Line, message.white().to_string());
+///
+/// This function can return an error under the following circumstances:
+///
+/// * If the command fails to spawn a child process.
+/// * If waiting for the child process to complete fails.
+/// * If the command completes execution but returns a non-zero exit status.
+///
+/// # Example
+///
+/// ```rust
+/// use std::process::Command;
+/// use breathes::hooks::ok;
+/// use std::io::Error;
+/// fn main() -> Result<(), Error> {
+///     let mut cmd = Command::new("echo");
+///     cmd.arg("Hello, world!");
+///
+///     ok(&mut cmd, "Command execution failed")?;
+///     Ok(())
+/// }
+/// ```
+/// ```
+pub fn ok(cmd: &mut Command, failure: &str) -> Result<(), Error> {
     let status = cmd.current_dir(".").spawn()?.wait()?.code();
-    if let Some(response) = status
-        && response.eq(&0)
-    {
-        output.stop_and_persist(
-            "✓".green().to_string().as_str(),
-            success.dark_cyan().to_string(),
-        );
+
+    if status == Some(0) {
         Ok(())
     } else {
-        output.stop_and_persist("!".red().to_string().as_str(), failure.yellow().to_string());
         Err(Error::other(failure))
     }
 }
+
+///
+/// Verifies the execution of hooks, organizes logs, and provides a summary of results.
+///
+/// This function takes a slice of `Hook` objects and performs the following operations:
+/// - Creates necessary directories to store logs
+/// - Executes each hook's command, capturing its standard output and error into separate files
+/// - Tracks the success/failure of each hook's execution
+/// - Measures the total execution time
+///
+/// # Arguments
+/// - `hooks`: A slice of [`Hook`] objects that represent the commands to be executed
+///
+/// # Returns
+/// Returns a `Result` containing:
+/// - A tuple `(bool, u64)`:
+///   - `bool`: Indicates whether all hooks were successfully executed (`true`) or if there were any failures (`false`)
+///   - `u64`: The total elapsed time in seconds for the verification process
+/// - An [`Error`] if any filesystem or execution operation fails
+///
+/// # Behavior
+/// - If the `language` of the first hook is `Language::Unknown`, the function will immediately return `(true, 0)`
+///   without further processing.
+/// - Creates directories named:
+///   - `breathes/<language>/stdout`
+///   - `breathes/<language>/stderr`
+///   where `<language>` is derived from the `language` field of the first hook.
+/// - Executes each hook's command using the appropriate shell:
+///   - On Windows: uses `cmd.exe` with the `/C` flag.
+///   - On other platforms: uses `sh` with the `-c` flag.
+/// - Redirects the standard output and error of each executed command to files located in the respective directories.
+/// - Tracks whether each hook executes successfully:
+///   - Uses the `ok()` function to determine success or failure for a command execution.
+///   - Updates the `status` vector to maintain the results for all hooks.
+///
+/// # Directories and Files
+/// - For each hook, the function generates log files:
+///   - `breathes/<language>/stdout/<hook.file>`: Stores standard output of the hook's command
+///   - `breathes/<language>/stderr/<hook.file>`: Stores standard error of the hook's command
 ///
 /// # Errors
-/// on hooks failed
-/// on failed to create files or directories
+/// - Fails if:
+///   - Directory creation using `create_dir_all` fails
+///   - Unable to create log files for standard output or error
+///   - Hook command execution fails at any point
+///
+/// # Example
+///
+/// ```rust
+/// use std::process::Command;
+/// use breathes::hooks::verify;
+/// use breathes::hooks::Hook;
+/// use breathes::hooks::Language;
+/// use std::io::Error;
+///
+/// fn main() -> Result<(), Error> {
+///     let hooks = vec![
+///         Hook {
+///         language: Language::Rust,
+///         description: "Running unit tests",
+///         success: "All tests passed",
+///         failure: "Some tests failed",
+///         file: "test.log",
+///         command: "cargo tree",
+///     }];
+///     let (success, duration) = verify(&hooks)?;
+///     assert!(success);
+///     Ok(())
+/// }
+/// ```
+///
+/// # Notes
+/// - Error handling for the `ok()` function is not explicitly documented here; ensure that the function handles
+///   execution failures appropriately and updates `status` correctly.
+///
 pub fn verify(hooks: &[Hook]) -> Result<(bool, u64), Error> {
     let start = Instant::now();
     let mut status: Vec<bool> = Vec::new();
-    create_dir_all("breathes")?;
-    for hook in hooks {
-        create_dir_all(format!("breathes{MAIN_SEPARATOR_STR}{}", hook.language))?;
-        create_dir_all(format!(
-            "breathes{MAIN_SEPARATOR_STR}{}/stdout",
-            hook.language
-        ))?;
-        create_dir_all(format!(
-            "breathes{MAIN_SEPARATOR_STR}{}/stderr",
-            hook.language
-        ))?;
 
-        if cfg!(target_os = "windows") {
-            if ok(
-                hook.description,
-                Command::new("cmd").arg("/C")
-                    .arg(hook.command)
-                    .current_dir(".")
-                    .stderr(
-                        File::create(format!("breathes{MAIN_SEPARATOR_STR}{}{MAIN_SEPARATOR_STR}stderr{MAIN_SEPARATOR_STR}{}", hook.language, hook.file))?
-                    )
-                    .stdout(
-                        File::create(format!("breathes{MAIN_SEPARATOR_STR}{}{MAIN_SEPARATOR_STR}stdout{MAIN_SEPARATOR_STR}{}", hook.language, hook.file))?
-                    ),
-                hook.success,
-                hook.failure,
-            )
-                .is_err()
-            {
+    create_dir_all("breathes")?;
+
+    if let Some(first_hook) = hooks.first() {
+        let lang = first_hook.language;
+        if lang == Language::Unknown {
+            return Ok((true, 0));
+        }
+
+        // On prépare les chemins proprement une seule fois
+        let mut base_path = PathBuf::from("breathes");
+        base_path.push(lang.to_string());
+
+        let stdout_dir = base_path.join("stdout");
+        let stderr_dir = base_path.join("stderr");
+
+        // Création des dossiers
+        create_dir_all(&stdout_dir)?;
+        create_dir_all(&stderr_dir)?;
+
+        for hook in hooks {
+            if hook.language == Language::Unknown {
+                continue;
+            }
+
+            // On construit le chemin du fichier de log final
+            let out_file = stdout_dir.join(hook.file);
+            let err_file = stderr_dir.join(hook.file);
+
+            let mut cmd = if cfg!(target_os = "windows") {
+                let mut c = Command::new("cmd");
+                c.arg("/C").arg(hook.command);
+                c
+            } else {
+                let mut c = Command::new("sh");
+                c.arg("-c").arg(hook.command);
+                c
+            };
+
+            // Configuration commune de la commande
+            cmd.current_dir(".")
+                .stdout(File::create(out_file)?)
+                .stderr(File::create(err_file)?);
+
+            if ok(&mut cmd, hook.failure).is_err() {
                 status.push(false);
             } else {
                 status.push(true);
             }
-        } else if ok(
-            hook.description,
-            Command::new("sh").arg("-c")
-                .arg(hook.command)
-                .current_dir(".")
-                .stderr(
-                    File::create(format!("breathes{MAIN_SEPARATOR_STR}{}{MAIN_SEPARATOR_STR}stderr{MAIN_SEPARATOR_STR}{}", hook.language, hook.file))?
-                )
-                .stdout(
-                    File::create(format!("breathes{MAIN_SEPARATOR_STR}{}{MAIN_SEPARATOR_STR}stdout{MAIN_SEPARATOR_STR}{}", hook.language, hook.file))?
-                ),
-            hook.success,
-            hook.failure,
-        )
-            .is_err()
-        {
-            status.push(false);
-        } else {
-            status.push(true);
         }
     }
-    Ok((
-        status.contains(&false).eq(&false),
-        start.elapsed().as_secs(),
-    ))
+
+    Ok((!status.contains(&false), start.elapsed().as_secs()))
 }
 
+/// Adds the specified `language` to the given vector `vec` if certain file conditions are met.
 ///
-/// # Errors
-/// on hooks failed
-fn run_hook(lang: Language, all: &mut HashMap<String, (bool, u64)>) -> Result<(), Error> {
-    let hooks = Hook::get(lang);
-    all.insert(lang.to_string(), verify(&hooks)?);
-    Ok(())
-}
-
-fn add_if_exists(file: &str, language: Language, vec: &mut Vec<Language>) {
+/// # Parameters
+///
+/// * `file`: A string representing a file path or a glob pattern to match files.
+/// * `language`: An enumeration value of type `Language` representing the programming language to be added.
+/// * `vec`: A mutable reference to a `Vec<Language>` where the language may be appended.
+///
+/// # Behavior
+///
+/// - For `language` being `Language::CSharp` or `Language::Haskell`:
+///   - It attempts to resolve the `file` parameter as a glob pattern using the `glob` function.
+///   - If the result is successful, it iterates over the resolved file paths.
+///   - For each file path in the list, if the file exists and is a regular file, the function adds `language` to `vec`.
+///
+/// - For other languages:
+///   - It checks if the provided `file` is a regular file (using `Path::new(file).is_file()`).
+///   - If the file exists and is a regular file, the function adds `language` to `vec`.
+///
+/// # Notes
+///
+/// - The `glob` function must be implemented or available via an external crate for matching file patterns.
+/// - The functionality uses pattern matching and guards to validate file system paths.
+/// - The function does nothing if the specified `file` or glob pattern does not match any regular file.
+///
+/// # Example
+///
+/// ```rust
+/// use breathes::hooks::add_if_exists;
+/// use breathes::hooks::Language;
+/// let mut languages = vec![];
+/// add_if_exists("*.cs", Language::CSharp, &mut languages);
+/// add_if_exists("Main.hs", Language::Haskell, &mut languages);
+/// assert_eq!(languages.len(), 0);
+/// ```
+///
+pub fn add_if_exists(file: &str, language: Language, vec: &mut Vec<Language>) {
     if language == Language::CSharp
-        && let Ok(files) = glob(file)
-    {
-        for file in files {
-            if let Ok(file) = file
-                && file.is_file()
-            {
-                vec.push(language);
-            }
-        }
-    } else if language == Language::D
         && let Ok(files) = glob(file)
     {
         for file in files {
@@ -948,6 +1488,39 @@ fn add_if_exists(file: &str, language: Language, vec: &mut Vec<Language>) {
         vec.push(language);
     }
 }
+
+/// Detects and returns a list of programming languages based on predefined criteria.
+///
+/// This function iterates through a collection of predefined programming languages and their
+/// associated file information (`LANGUAGES`). For each entry, it checks if the corresponding
+/// files exist, and if they do, adds the language to the resulting list.
+///
+/// # Returns
+/// A `Vec<Language>` containing all programming languages that were detected based on
+/// the existence of their associated files.
+///
+/// # Attributes
+/// * `#[must_use]` - Indicates that the return value of this function should not be ignored
+///   as it provides meaningful information.
+///
+/// # Example
+/// ```
+/// use breathes::hooks::detect;
+/// let detected_languages = detect();
+/// for lang in detected_languages {
+///     println!("{lang}");
+/// }
+/// ```
+///
+/// # Notes
+/// - This function depends on the global `LANGUAGES` collection, which maps programming
+///   languages to their associated file data.
+/// - The `add_if_exists` function is responsible for determining if a language is added
+///   to the result based on file existence.
+///
+/// # See Also
+/// - `add_if_exists` function for further details on how languages are added.
+///
 #[must_use]
 pub fn detect() -> Vec<Language> {
     let mut all: Vec<Language> = Vec::new();
