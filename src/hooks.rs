@@ -1207,11 +1207,12 @@ pub fn run_hooks() -> Result<i32, Error> {
             pb_lang.set_message(lang.to_string());
             let hooks = Hook::get(lang);
             let res = verify(&hooks, &pb_lang);
+            pb_lang.finish_and_clear();
             pb.inc(1);
             (lang, res)
         })
         .collect();
-    pb.finish_with_message("All hooks completed!");
+    pb.finish_and_clear();
     let mut global_success = true;
 
     for (lang, res) in &results {
@@ -1290,7 +1291,7 @@ pub fn run_hooks() -> Result<i32, Error> {
 ///     let mut cmd = Command::new("echo");
 ///     cmd.arg("Hello, world!");
 ///
-///     ok(&mut cmd, "Command execution failed")?;
+///     ok("Running unit tests", &mut cmd, "Success", "Command execution failed")?;
 ///     Ok(())
 /// }
 /// ```
@@ -1358,6 +1359,7 @@ pub fn ok(_desc: &str, cmd: &mut Command, _success: &str, failure: &str) -> Resu
 /// use breathes::hooks::Hook;
 /// use breathes::hooks::Language;
 /// use std::io::Error;
+/// use indicatif::ProgressBar;
 ///
 /// fn main() -> Result<(), Error> {
 ///     let hooks = vec![
@@ -1369,7 +1371,8 @@ pub fn ok(_desc: &str, cmd: &mut Command, _success: &str, failure: &str) -> Resu
 ///         file: "test.log",
 ///         command: "cargo tree",
 ///     }];
-///     let (success, duration) = verify(&hooks)?;
+///     let pb = ProgressBar::new(1);
+///     let (success, duration) = verify(&hooks, &pb)?;
 ///     assert!(success);
 ///     Ok(())
 /// }
