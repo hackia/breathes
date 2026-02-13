@@ -1,6 +1,6 @@
 use crossterm::style::Stylize;
 use glob::glob;
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use std::fmt::{Display, Formatter};
 use std::fs::{File, create_dir_all};
@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Instant;
 use tabled::Tabled;
+use tabled::builder::Builder;
 use tabled::settings::Style;
 
 /// A constant string representing the file extension pattern for C# project files.
@@ -1174,75 +1175,84 @@ impl Hook {
 pub fn run_hooks() -> Result<i32, Error> {
     let start = Instant::now();
     let l = detect();
-
+    let mut builder = Builder::default();
+    builder.push_record(["Language", "Status", "Duration", "Information"]);
+    let multi = MultiProgress::new();
     if l.is_empty() {
         return Err(Error::other("No language detected"));
     }
     let pb = ProgressBar::new(l.len() as u64);
     pb.set_style(
         ProgressStyle::with_template(
-            "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} {msg}",
+            "{spinner:.white} [{elapsed_precise}] [{bar:40.white}] {pos}/{len} {msg}",
         )
         .expect("Failed to set progress bar style")
         .progress_chars("#>-"),
     );
     // Informe l'utilisateur que le scan commence
-    println!("{}", "Running hooks in parallel...".bold().cyan());
+    println!("Running hooks in parallel...");
 
     // Exécution parallèle : map chaque langage vers son résultat de vérification
     let results: Vec<(Language, Result<(bool, u64), Error>)> = l
         .into_par_iter()
         .map(|lang| {
+            let pb_lang = multi.add(ProgressBar::new(Hook::get(lang).len() as u64));
+            pb_lang.set_style(
+                ProgressStyle::with_template(
+                    "{spinner:.white} {prefix:.bold} [{bar:20.white}] {pos}/{len} {msg}",
+                )
+                .unwrap(),
+            );
+            pb_lang.set_prefix(lang.to_string());
+            pb_lang.set_message(lang.to_string());
             let hooks = Hook::get(lang);
-            let res = verify(&hooks);
+            let res = verify(&hooks, &pb_lang);
             pb.inc(1);
             (lang, res)
         })
         .collect();
     pb.finish_with_message("All hooks completed!");
-    let mut table = tabled::builder::Builder::default();
-    table.push_record(["Language", "Status", "Take"]);
-
     let mut global_success = true;
 
-    for (lang, res) in results {
+    for (lang, res) in &results {
         match res {
             Ok((status, duration)) => {
                 if !status {
                     global_success = false;
                 }
-                let status_str = if status {
-                    "Success".green().to_string()
+                let status_str = if *status {
+                    "SUCCESS".green().to_string()
                 } else {
-                    "Failure".red().to_string()
+                    "FAILURE".red().to_string()
                 };
-                table.push_record([lang.to_string(), status_str, format!("{duration}s")]);
+                builder.push_record([
+                    lang.to_string(),
+                    status_str,
+                    format!("{duration}s"),
+                    "-".to_string(),
+                ]);
             }
             Err(e) => {
                 global_success = false;
-                table.push_record([
+                builder.push_record([
                     lang.to_string(),
-                    "Error".on_red().to_string(),
+                    "ERROR".yellow().to_string(),
+                    "0s".to_string(),
                     e.to_string(),
                 ]);
             }
         }
     }
-
     // Résumé final dans la table
-    let final_status = if global_success {
-        "SUCCESS".green().bold().to_string()
-    } else {
-        "FAILURE".red().bold().to_string()
-    };
+    let table = builder
+        .build()
+        .with(Style::rounded())
+        .to_string();
+    println!("\nVerification Results:");
+    println!("{table}");
 
-    table.push_record([
-        "TOTAL".to_string(),
-        final_status,
-        format!("{}s", start.elapsed().as_secs()),
-    ]);
-
-    println!("\n{}", table.build().with(Style::modern_rounded()));
+    let final_status = if global_success { "SUCCESS" } else { "FAILURE" };
+    println!("\nOverall Status: {} (Total time: {}s)", final_status, start.elapsed().as_secs());
 
     if !global_success {
         return Err(Error::other("Checks failed. Check logs in ./breathes/"));
@@ -1285,7 +1295,7 @@ pub fn run_hooks() -> Result<i32, Error> {
 /// }
 /// ```
 /// ```
-pub fn ok(cmd: &mut Command, failure: &str) -> Result<(), Error> {
+pub fn ok(_desc: &str, cmd: &mut Command, _success: &str, failure: &str) -> Result<(), Error> {
     let status = cmd.current_dir(".").spawn()?.wait()?.code();
 
     if status == Some(0) {
@@ -1369,7 +1379,7 @@ pub fn ok(cmd: &mut Command, failure: &str) -> Result<(), Error> {
 /// - Error handling for the `ok()` function is not explicitly documented here; ensure that the function handles
 ///   execution failures appropriately and updates `status` correctly.
 ///
-pub fn verify(hooks: &[Hook]) -> Result<(bool, u64), Error> {
+pub fn verify(hooks: &[Hook], pb: &ProgressBar) -> Result<(bool, u64), Error> {
     let start = Instant::now();
     let mut status: Vec<bool> = Vec::new();
 
@@ -1396,7 +1406,7 @@ pub fn verify(hooks: &[Hook]) -> Result<(bool, u64), Error> {
             if hook.language == Language::Unknown {
                 continue;
             }
-
+            pb.set_message(hook.description);
             // On construit le chemin du fichier de log final
             let out_file = stdout_dir.join(hook.file);
             let err_file = stderr_dir.join(hook.file);
@@ -1416,14 +1426,21 @@ pub fn verify(hooks: &[Hook]) -> Result<(bool, u64), Error> {
                 .stdout(File::create(out_file)?)
                 .stderr(File::create(err_file)?);
 
-            if ok(&mut cmd, hook.failure).is_err() {
+            // On exécute
+            let result = ok(hook.description, &mut cmd, hook.success, hook.failure);
+
+            match result {
+                Ok(_) => pb.println(format!("  {} {}", "✓".green(), hook.description)),
+                Err(_) => pb.println(format!("  {} {}", "!".red(), hook.description)),
+            }
+            pb.inc(1);
+            if result.is_err() {
                 status.push(false);
             } else {
                 status.push(true);
             }
         }
     }
-
     Ok((!status.contains(&false), start.elapsed().as_secs()))
 }
 
@@ -1507,7 +1524,7 @@ pub fn add_if_exists(file: &str, language: Language, vec: &mut Vec<Language>) {
 /// ```
 /// use breathes::hooks::detect;
 /// let detected_languages = detect();
-/// for lang in detected_languages {
+/// for lang in &detected_languages {
 ///     println!("{lang}");
 /// }
 /// ```

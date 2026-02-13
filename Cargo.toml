@@ -1,17 +1,19 @@
 [package]
 name = "breathes"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2024"
 description = "A library to check source code"
 license = "AGPL-3.0"
 repository = "https://github.com/hackia/breathes"
+readme = "README.md"
+keywords = ["breath", "hooks", "code", "check", "commit"]
+categories = ["development-tools::testing"]
 [dependencies]
-inquire = "0.9.1"
+inquire = "0.9.3"
 hunspell-rs = "0.4.0"
-regex = "1.12.2"
+regex = "1.12.3"
 once_cell = "1.21.3"
 tabled = { version = "0.20.0", features = ["derive"] }
-spinners = "4.1.1"
 crossterm = "0.29.0"
 glob = "0.3.3"
 rayon = "1.11.0"
