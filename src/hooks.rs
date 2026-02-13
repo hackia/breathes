@@ -8,9 +8,6 @@ use std::io::Error;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Instant;
-use tabled::Tabled;
-use tabled::builder::Builder;
-use tabled::settings::Style;
 
 /// A constant string representing the file extension pattern for C# project files.
 ///
@@ -365,7 +362,6 @@ pub const D_FILE: &str = "dub.json";
 /// - `Debug`: Enables formatting the enum value using the `{:?}` formatter.
 /// - `Hash`: Allows the enum to be used as a key in hashed collections, such as `HashMap`.
 /// - `Eq` and `PartialEq`: Enables equality and partial equality comparisons.
-/// - `Tabled`: Enables the enum to be used with table formatting libraries.
 ///
 /// # Variants
 /// * `Unknown`: Represents an unspecified or unrecognized programming language.
@@ -387,7 +383,7 @@ pub const D_FILE: &str = "dub.json";
 /// * `Swift`: Represents the Swift programming language.
 /// * `Dart`: Represents the Dart programming language.
 /// * `Elixir`: Represents the Elixir programming language.
-#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Tabled)]
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub enum Language {
     Unknown,
     R,
@@ -1144,8 +1140,7 @@ impl Hook {
 /// 4. Runs the verification hooks for each detected language in parallel using `into_par_iter()`.
 /// 5. Collects the results of the hook executions, including whether each one succeeded or failed,
 ///    along with the time taken for execution.
-/// 6. Compiles the results into a formatted table and displays it on the console.
-/// 7. Returns a success or failure based on the aggregate status of the hooks.
+/// 6. Returns a success or failure based on the aggregate status of the hooks.
 ///
 /// # Returns
 /// - `Ok(0)` on successful execution when all hooks are successfully verified.
@@ -1153,30 +1148,11 @@ impl Hook {
 ///
 /// # Errors
 /// - Returns `Err(Error::other("No language detected"))` if no programming languages are found.
-/// - Returns `Err(Error::other("Checks failed. Check logs in ./breathes/"))` if one or more hooks fail.
-///
-/// # Output
-/// This function logs the progress of the hook executions and a summarized results table to the console.
-///
-/// The table displays:
-/// - `Language`: The name of the detected programming language.
-/// - `Status`: The result for the language (e.g., "Success", "Failure", or "Error").
-/// - `Take`: Execution duration for that language in seconds.
-///
-/// At the end, an additional row summarizes the overall success or failure of all hooks and total elapsed time.
-///
-/// # Dependencies
-/// - Uses `ProgressBar` from the `indicatif` crate to display task progress.
-/// - `tabled` crate is used for displaying a results table.
-/// - Parallel execution is enabled with `rayon`.
-///
 /// # Panics
 /// - This function will panic if the provided progress bar style template cannot be set.
 pub fn run_hooks() -> Result<i32, Error> {
     let start = Instant::now();
     let l = detect();
-    let mut builder = Builder::default();
-    builder.push_record(["Language", "Status", "Duration", "Information"]);
     let multi = MultiProgress::new();
     if l.is_empty() {
         return Err(Error::other("No language detected"));
@@ -1215,42 +1191,18 @@ pub fn run_hooks() -> Result<i32, Error> {
     pb.finish_and_clear();
     let mut global_success = true;
 
-    for (lang, res) in &results {
+    for (_lang, res) in &results {
         match res {
-            Ok((status, duration)) => {
+            Ok((status, _duration)) => {
                 if !status {
                     global_success = false;
                 }
-                let status_str = if *status {
-                    "SUCCESS".green().to_string()
-                } else {
-                    "FAILURE".red().to_string()
-                };
-                builder.push_record([
-                    lang.to_string(),
-                    status_str,
-                    format!("{duration}s"),
-                    "-".to_string(),
-                ]);
             }
-            Err(e) => {
+            Err(_e) => {
                 global_success = false;
-                builder.push_record([
-                    lang.to_string(),
-                    "ERROR".yellow().to_string(),
-                    "0s".to_string(),
-                    e.to_string(),
-                ]);
             }
         }
     }
-    // Résumé final dans la table
-    let table = builder
-        .build()
-        .with(Style::rounded())
-        .to_string();
-    println!("\nVerification Results:");
-    println!("{table}");
 
     let final_status = if global_success { "SUCCESS" } else { "FAILURE" };
     println!("\nOverall Status: {} (Total time: {}s)", final_status, start.elapsed().as_secs());
